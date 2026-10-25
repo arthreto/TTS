@@ -1,0 +1,17 @@
+# Dépendances du mode Réaliste (Chatterbox Multilingual).
+# PyTorch est installé séparément par installer-mode-realiste (version CUDA pour carte NVIDIA),
+# puis chatterbox-tts est installé avec --no-deps pour ne pas remplacer cette version.
+numpy>=1.24,<2.0; python_version < "3.13"
+numpy>=2.0; python_version >= "3.13"
+librosa==0.11.0
+s3tokenizer
+transformers==5.2.0
+diffusers==0.29.0
+resemble-perth>=1.0.0
+conformer==0.3.2
+safetensors==0.5.3
+pyloudnorm
+omegaconf
+einops
+# resemble-perth (tatouage audio de Chatterbox) importe pkg_resources, retiré des setuptools récents
+setuptools<81

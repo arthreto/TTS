@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voix IA</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --text: #1d1c1a; --muted: #6b6862; --line: #e3e0d9;
+    --accent: #3d5afe; --accent-soft: #e8ecff; --ok: #1f8a4c; --err: #c62828; --warn: #a15c00; --warn-soft: #fff4e0;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --panel: #1e1d1b; --text: #f0eee9; --muted: #a09c94; --line: #33312d;
+      --accent: #7c8cff; --accent-soft: #262a45; --ok: #4cc27f; --err: #ff6b6b; --warn: #ffb44d; --warn-soft: #3a2e1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+  .tagline { color: var(--muted); font-size: 14px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+
+  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+  .seg button { border: 0; background: transparent; color: var(--text); padding: 8px 18px; border-radius: 999px; font: inherit; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .notice { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 14px; background: var(--accent-soft); }
+  .notice.warn { background: var(--warn-soft); color: var(--warn); }
+  .notice.err { background: var(--warn-soft); color: var(--err); }
+  .notice code { font-size: 13px; }
+
+  .voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 16px; }
+  .voice {
+    text-align: left; border: 1.5px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 12px; padding: 12px; cursor: pointer; font: inherit; position: relative; width: 100%;
+  }
+  .voice:hover { border-color: var(--accent); }
+  .voice[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .voice.add { border-style: dashed; color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 600; min-height: 84px; }
+  .voice .name { font-weight: 600; padding-right: 20px; }
+  .voice .meta { color: var(--muted); font-size: 13px; }
+  .voice .state { font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .voice .state.ok { color: var(--ok); }
+  .del { position: absolute; top: 6px; right: 6px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; }
+  .del:hover { color: var(--err); }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+
+  textarea {
+    width: 100%; min-height: 180px; resize: vertical; padding: 14px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit;
+  }
+  textarea:focus, input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .small { font-size: 13px; color: var(--muted); }
+  .link { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 13px; padding: 0; }
+
+  .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .controls label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  input[type=range] { accent-color: var(--accent); width: 160px; }
+  .primary, .secondary {
+    border-radius: 10px; padding: 12px 22px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .primary { background: var(--accent); color: #fff; border: 0; }
+  .secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  .controls .primary { margin-left: auto; }
+  .primary:disabled { opacity: .6; cursor: progress; }
+
+  .status { margin-top: 12px; font-size: 14px; min-height: 1.5em; }
+  .status.err { color: var(--err); }
+
+  .history { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .history li { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .history .h-text { font-size: 14px; color: var(--muted); margin-bottom: 8px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .history .h-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .history audio { flex: 1; min-width: 220px; }
+  .history a { color: var(--accent); font-size: 14px; font-weight: 600; text-decoration: none; }
+  .empty { color: var(--muted); font-size: 14px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text); padding: 24px; width: min(520px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { margin: 0 0 4px; }
+  dialog label.field { display: block; font-size: 14px; margin: 16px 0 6px; font-weight: 600; }
+  dialog input[type=text] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  .read-this { background: var(--bg); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-style: italic; margin: 8px 0; }
+  .src { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .src .secondary { padding: 10px 16px; }
+  .rec-on { color: var(--err); font-weight: 600; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Voix IA</h1>
+    <span class="tagline">Synthèse vocale gratuite, 100 % locale · Français &amp; Anglais</span>
+  </header>
+
+  <section>
+    <h2>1. Langue, moteur et voix</h2>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Langue" id="langSeg">
+        <button type="button" data-lang="fr" aria-pressed="true">Français</button>
+        <button type="button" data-lang="en" aria-pressed="false">English</button>
+      </div>
+      <div class="seg" role="group" aria-label="Moteur" id="engineSeg">
+        <button type="button" data-engine="rapide" aria-pressed="true">Rapide</button>
+        <button type="button" data-engine="realiste" aria-pressed="false">Réaliste</button>
+      </div>
+    </div>
+    <div id="engineNotice"></div>
+    <div class="voices" id="voices" role="radiogroup" aria-label="Voix"></div>
+    <p class="small" id="voicesHint" style="margin:12px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>2. Texte</h2>
+    <textarea id="text" placeholder="Écrivez ou collez votre texte ici…"></textarea>
+    <div class="row">
+      <button type="button" class="link" id="sample">Insérer un exemple</button>
+      <span class="small" id="count">0 caractère</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="controls">
+      <label id="speedCtl">Vitesse
+        <input type="range" id="speed" min="0.5" max="2" step="0.05" value="1">
+        <span id="speedVal">1.00×</span>
+      </label>
+      <label id="exagCtl" hidden title="Plus haut = intonation plus marquée et émotive">Expressivité
+        <input type="range" id="exag" min="0.25" max="1.2" step="0.05" value="0.5">
+        <span id="exagVal">0.50</span>
+      </label>
+      <button type="button" class="primary" id="go">Générer la voix</button>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Résultats</h2>
+    <ul class="history" id="history"><li class="empty" style="border:0;padding:0">Aucun audio pour l'instant. Astuce : Ctrl + Entrée pour générer.</li></ul>
+  </section>
+
+  <footer>Moteurs : Piper et Chatterbox (open source) · aucune donnée n'est envoyée sur Internet pendant la génération</footer>
+</main>
+
+<dialog id="addDlg">
+  <h3>Ajouter une voix</h3>
+  <p class="small" style="margin:0">Le mode Réaliste imite la voix d'un enregistrement de 10 à 20 secondes. Une voix humaine nette, sans musique ni bruit de fond, donne le meilleur résultat. N'utilisez que votre voix ou celle d'une personne qui est d'accord.</p>
+  <label class="field" for="addName">Nom de la voix</label>
+  <input type="text" id="addName" maxlength="40" placeholder="ex. Ma voix">
+  <label class="field">Enregistrement (<span id="addLangLabel">français</span>)</label>
+  <div class="src">
+    <button type="button" class="secondary" id="pickFile">Choisir un fichier audio</button>
+    <button type="button" class="secondary" id="recBtn">🎙 Enregistrer au micro</button>
+    <input type="file" id="fileInput" accept="audio/*" hidden>
+  </div>
+  <div id="recHelp" hidden>
+    <p class="small" style="margin:10px 0 0">Lisez ce texte calmement, puis cliquez sur « Arrêter » :</p>
+    <div class="read-this" id="readThis"></div>
+  </div>
+  <p class="small" id="addInfo" style="margin:10px 0 0"></p>
+  <audio id="addPreview" controls hidden style="width:100%;margin-top:8px"></audio>
+  <div class="dlg-actions">
+    <button type="button" class="secondary" id="addCancel">Annuler</button>
+    <button type="button" class="primary" id="addSave" disabled>Enregistrer la voix</button>
+  </div>
+</dialog>
+
+<script>
+const SAMPLES = {
+  fr: "Bonjour ! Ceci est un exemple de synthèse vocale entièrement gratuite, qui fonctionne directement sur votre ordinateur. Vous pouvez choisir parmi plusieurs voix.",
+  en: "Hello! This is a demo of completely free text to speech, running locally on your own computer. You can pick from several different voices.",
+};
+const READ_THIS = {
+  fr: "Bonjour, je m'appelle comme vous voulez. Aujourd'hui il fait beau, alors je vais me promener au bord de l'eau. J'adore écouter le bruit des vagues et sentir le vent sur mon visage.",
+  en: "Hello there. Today the weather is lovely, so I'm going for a walk along the river. I really enjoy listening to the water and feeling the breeze on my face.",
+};
+const MAX_REF_SECONDS = 20;
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const state = {
+  lang: "fr",
+  engine: store.get("voixia-engine") === "realiste" ? "realiste" : "rapide",
+  catalog: [], custom: [], realistic: null,
+  selected: {},
+  busy: false,
+};
+let pollTimer = null;
+
+async function api(path, opts) {
+  const init = opts instanceof FormData ? { method: "POST", body: opts }
+    : opts?.method ? opts
+    : opts ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(opts) } : {};
+  const res = await fetch(path, init);
+  if (!res.ok) {
+    let msg = `Erreur ${res.status}`;
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res;
+}
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmtMB = (bytes) => (bytes / 1048576).toFixed(0) + " Mo";
+const selKey = () => `${state.engine}-${state.lang}`;
+
+function visibleVoices() {
+  const list = state.catalog.filter((v) => v.lang === state.lang).map((v) => ({ ...v, kind: "catalog" }));
+  if (state.engine === "realiste") {
+    const custom = state.custom.filter((v) => v.lang === state.lang).map((v) => ({ ...v, kind: "custom", installed: true }));
+    const builtin = state.lang === "en" ? [{ id: "builtin", label: "Voix intégrée", gender: "Femme", accent: "US", kind: "builtin", installed: true }] : [];
+    return [...custom, ...builtin, ...list];
+  }
+  return list;
+}
+
+function currentVoice() {
+  const voices = visibleVoices();
+  return voices.find((v) => v.id === state.selected[selKey()]) || voices[0];
+}
+
+function renderVoices() {
+  const box = $("voices");
+  box.innerHTML = "";
+  const current = currentVoice();
+  for (const v of visibleVoices()) {
+    const wrap = document.createElement("div");
+    wrap.style.position = "relative";
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "voice";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(current && current.id === v.id));
+    let st;
+    if (v.kind === "custom") st = `<div class="state ok">✓ Ma voix</div>`;
+    else if (v.installed) st = `<div class="state ok">✓ Prête</div>`;
+    else if (v.download?.error) st = `<div class="state" style="color:var(--err)">Erreur – cliquer pour réessayer</div>`;
+    else if (v.download) {
+      const pct = v.download.total ? Math.round((v.download.done / v.download.total) * 100) : 0;
+      st = `<div class="state">Téléchargement… ${pct}%${v.download.total ? " de " + fmtMB(v.download.total) : ""}</div><div class="bar"><i style="width:${pct}%"></i></div>`;
+    } else st = `<div class="state">À télécharger</div>`;
+    const meta = v.kind === "custom" ? "Voix personnalisée"
+      : `${v.gender} · ${v.accent}${v.quality === "low" ? " · qualité basse" : v.quality === "high" ? " · haute qualité" : ""}`;
+    b.innerHTML = `<div class="name">${esc(v.label)}</div><div class="meta">${esc(meta)}</div>${st}`;
+    b.onclick = () => {
+      state.selected[selKey()] = v.id;
+      if (v.kind === "catalog" && !v.installed && (!v.download || v.download.error)) download(v.id);
+      renderVoices();
+    };
+    wrap.appendChild(b);
+    if (v.kind === "custom") {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "del";
+      del.title = "Supprimer cette voix";
+      del.setAttribute("aria-label", `Supprimer ${v.label}`);
+      del.textContent = "×";
+      del.onclick = () => deleteCustom(v);
+      wrap.appendChild(del);
+    }
+    box.appendChild(wrap);
+  }
+  if (state.engine === "realiste") {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "voice add";
+    add.textContent = "+ Ajouter une voix";
+    add.onclick = openAddDialog;
+    box.appendChild(add);
+  }
+  $("voicesHint").textContent = state.engine === "realiste"
+    ? "Mode Réaliste : les voix du catalogue sont imitées à partir de la voix Piper du même nom. Pour un résultat encore plus naturel, ajoutez un vrai enregistrement de voix humaine."
+    : "Chaque voix est téléchargée une seule fois (20 à 110 Mo), ensuite tout fonctionne hors ligne.";
+}
+
+function renderEngine() {
+  document.querySelectorAll("#engineSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.engine === state.engine)));
+  const real = state.engine === "realiste";
+  $("speedCtl").hidden = real;
+  $("exagCtl").hidden = !real;
+  const n = $("engineNotice");
+  const r = state.realistic;
+  if (!real || !r) { n.innerHTML = ""; return; }
+  if (!r.installed) {
+    n.innerHTML = `<div class="notice warn">Le mode Réaliste n'est pas encore installé. Fermez l'appli, lancez <code>installer-mode-realiste.bat</code> (Windows) ou <code>installer-mode-realiste.sh</code> (Mac/Linux), puis relancez l'appli.</div>`;
+  } else if (r.state === "loading" || r.state === "idle") {
+    n.innerHTML = `<div class="notice">Chargement du modèle réaliste… Au tout premier lancement, il se télécharge (environ 3 Go), ça peut prendre quelques minutes.</div>`;
+  } else if (r.state === "error") {
+    n.innerHTML = `<div class="notice err">${esc(r.error)}</div>`;
+  } else if (r.device === "cuda") {
+    n.innerHTML = `<div class="notice">Modèle réaliste prêt sur la carte graphique : ${esc(r.gpu)}.</div>`;
+  } else {
+    n.innerHTML = `<div class="notice warn">Modèle réaliste prêt, mais il tourne sur le processeur (carte graphique NVIDIA non détectée) : la génération sera lente. Mettez à jour le pilote NVIDIA puis relancez l'appli.</div>`;
+  }
+}
+
+async function refresh() {
+  const [voices, realistic] = await Promise.all([
+    api("/api/voices").then((r) => r.json()),
+    api("/api/realistic").then((r) => r.json()),
+  ]);
+  state.catalog = voices.catalog;
+  state.custom = voices.custom;
+  state.realistic = realistic;
+  renderVoices();
+  renderEngine();
+  const pending = state.catalog.some((v) => v.download && !v.download.error)
+    || (realistic.installed && ["idle", "loading"].includes(realistic.state) && state.engine === "realiste");
+  clearTimeout(pollTimer);
+  if (pending) pollTimer = setTimeout(refresh, 1000);
+}
+
+async function download(id) {
+  try { await api("/api/download", { voice: id }); }
+  catch (e) { setStatus(e.message, true); }
+  refresh();
+}
+
+async function waitInstalled(id) {
+  for (;;) {
+    await refresh();
+    const v = state.catalog.find((x) => x.id === id);
+    if (v.installed) return;
+    if (v.download?.error) throw new Error(v.download.error);
+    if (!v.download) await api("/api/download", { voice: id });
+    const pct = v.download?.total ? Math.round((v.download.done / v.download.total) * 100) : 0;
+    setStatus(`Téléchargement de la voix ${v.label}… ${pct}%`);
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+
+function setStatus(msg, isErr = false) {
+  $("status").textContent = msg;
+  $("status").className = "status" + (isErr ? " err" : "");
+}
+
+function setLang(lang) {
+  state.lang = lang;
+  document.querySelectorAll("#langSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $("text").placeholder = lang === "fr" ? "Écrivez ou collez votre texte ici…" : "Type or paste your text here…";
+  renderVoices();
+}
+
+async function setEngine(engine) {
+  state.engine = engine;
+  store.set("voixia-engine", engine);
+  if (engine === "realiste" && state.realistic?.installed && state.realistic.state === "idle") {
+    await api("/api/realistic/load", {}).catch(() => {});
+  }
+  renderEngine();
+  renderVoices();
+  refresh();
+}
+
+function updateCount() {
+  const n = $("text").value.length;
+  $("count").textContent = `${n.toLocaleString("fr-FR")} caractère${n > 1 ? "s" : ""}`;
+}
+
+async function generate() {
+  if (state.busy) return;
+  const text = $("text").value.trim();
+  if (!text) { setStatus("Écrivez d'abord un texte.", true); $("text").focus(); return; }
+  const voice = currentVoice();
+  const real = state.engine === "realiste";
+  if (real && state.realistic?.state !== "ready") {
+    setStatus(state.realistic?.installed ? "Le modèle réaliste est encore en cours de chargement, patientez un peu." : "Le mode Réaliste n'est pas installé (voir le message plus haut).", true);
+    return;
+  }
+  state.busy = true;
+  $("go").disabled = true;
+  try {
+    if (voice.kind === "catalog" && !voice.installed) await waitInstalled(voice.id);
+    setStatus(real ? "Génération réaliste en cours… (quelques secondes par phrase)" : "Génération en cours…");
+    const t0 = performance.now();
+    const body = { text, voice: voice.id, engine: state.engine, lang: state.lang };
+    if (real) body.exaggeration = Number($("exag").value);
+    else body.speed = Number($("speed").value);
+    const blob = await (await api("/api/tts", body)).blob();
+    addResult(blob, text, voice, real);
+    setStatus(`Terminé en ${((performance.now() - t0) / 1000).toFixed(1)} s.`);
+  } catch (e) {
+    setStatus(e.message, true);
+  } finally {
+    state.busy = false;
+    $("go").disabled = false;
+  }
+}
+
+function addResult(blob, text, voice, real) {
+  const list = $("history");
+  list.querySelector(".empty")?.remove();
+  const url = URL.createObjectURL(blob);
+  const li = document.createElement("li");
+  const stamp = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).replaceAll(":", "-");
+  const slug = voice.label.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "voix";
+  li.innerHTML = `<div class="h-text"></div><div class="h-row"><audio controls src="${url}"></audio><a download="voix-${slug}${real ? "-realiste" : ""}-${stamp}.wav" href="${url}">Télécharger (.wav)</a></div>`;
+  li.querySelector(".h-text").textContent = `${voice.label}${real ? " (réaliste)" : ""} — ${text}`;
+  list.prepend(li);
+  li.querySelector("audio").play().catch(() => {});
+}
+
+async function deleteCustom(v) {
+  if (!confirm(`Supprimer la voix « ${v.label} » ?`)) return;
+  try { await api(`/api/custom/${encodeURIComponent(v.id)}`, { method: "DELETE" }); }
+  catch (e) { setStatus(e.message, true); }
+  refresh();
+}
+
+// ----------------------------------------------------------------- Ajout de voix
+// L'audio (fichier ou micro) est décodé et converti en WAV mono dans le navigateur,
+// ce qui accepte tous les formats que le navigateur sait lire (mp3, m4a, ogg, webm…).
+let addWav = null;
+let recorder = null;
+
+function encodeWav(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+async function toMonoWav(arrayBuffer) {
+  const ctx = new AudioContext();
+  try {
+    const audio = await ctx.decodeAudioData(arrayBuffer);
+    const len = Math.min(audio.length, Math.floor(audio.sampleRate * MAX_REF_SECONDS));
+    const mono = new Float32Array(len);
+    for (let c = 0; c < audio.numberOfChannels; c++) {
+      const data = audio.getChannelData(c);
+      for (let i = 0; i < len; i++) mono[i] += data[i] / audio.numberOfChannels;
+    }
+    return { wav: encodeWav(mono, audio.sampleRate), seconds: len / audio.sampleRate, trimmed: audio.length > len };
+  } finally {
+    ctx.close();
+  }
+}
+
+function setAddAudio(result) {
+  addWav = result.wav;
+  const p = $("addPreview");
+  p.src = URL.createObjectURL(result.wav);
+  p.hidden = false;
+  const s = result.seconds.toFixed(0);
+  $("addInfo").textContent = result.seconds < 5
+    ? `Enregistrement de ${s} s : c'est un peu court, visez au moins 10 secondes.`
+    : `Enregistrement de ${s} s${result.trimmed ? ` (coupé aux ${MAX_REF_SECONDS} premières secondes)` : ""}. Écoutez-le pour vérifier.`;
+  updateAddSave();
+}
+
+function updateAddSave() { $("addSave").disabled = !(addWav && $("addName").value.trim()); }
+
+function openAddDialog() {
+  addWav = null;
+  $("addName").value = "";
+  $("addInfo").textContent = "";
+  $("addPreview").hidden = true;
+  $("recHelp").hidden = true;
+  $("addLangLabel").textContent = state.lang === "fr" ? "en français" : "en anglais";
+  $("readThis").textContent = READ_THIS[state.lang];
+  updateAddSave();
+  $("addDlg").showModal();
+}
+
+$("pickFile").onclick = () => $("fileInput").click();
+$("fileInput").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try { setAddAudio(await toMonoWav(await file.arrayBuffer())); }
+  catch { $("addInfo").textContent = "Impossible de lire ce fichier audio. Essayez un autre format (mp3, wav, m4a…)."; }
+};
+
+$("recBtn").onclick = async () => {
+  if (recorder) { recorder.stop(); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { $("addInfo").textContent = "Accès au micro refusé ou aucun micro détecté."; return; }
+  const chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = (ev) => chunks.push(ev.data);
+  recorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    clearTimeout(recorder.timer);
+    recorder = null;
+    $("recBtn").textContent = "🎙 Enregistrer au micro";
+    $("recBtn").classList.remove("rec-on");
+    try { setAddAudio(await toMonoWav(await new Blob(chunks).arrayBuffer())); }
+    catch { $("addInfo").textContent = "L'enregistrement n'a pas pu être lu, réessayez."; }
+  };
+  recorder.start();
+  recorder.timer = setTimeout(() => recorder?.stop(), MAX_REF_SECONDS * 1000);
+  $("recHelp").hidden = false;
+  $("recBtn").textContent = "⏹ Arrêter";
+  $("recBtn").classList.add("rec-on");
+  $("addInfo").textContent = `Enregistrement en cours (${MAX_REF_SECONDS} s maximum)…`;
+};
+
+$("addName").oninput = updateAddSave;
+$("addCancel").onclick = () => { recorder?.stop(); $("addDlg").close(); };
+$("addSave").onclick = async () => {
+  const fd = new FormData();
+  fd.append("name", $("addName").value.trim());
+  fd.append("lang", state.lang);
+  fd.append("file", addWav, "voix.wav");
+  $("addSave").disabled = true;
+  try {
+    const entry = await (await api("/api/custom", fd)).json();
+    state.selected[selKey()] = entry.id;
+    $("addDlg").close();
+    await refresh();
+  } catch (e) {
+    $("addInfo").textContent = e.message;
+    $("addSave").disabled = false;
+  }
+};
+
+// ----------------------------------------------------------------- Démarrage
+document.querySelectorAll("#langSeg button").forEach((b) => (b.onclick = () => setLang(b.dataset.lang)));
+document.querySelectorAll("#engineSeg button").forEach((b) => (b.onclick = () => setEngine(b.dataset.engine)));
+$("text").addEventListener("input", updateCount);
+$("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) generate(); });
+$("sample").onclick = () => { $("text").value = SAMPLES[state.lang]; updateCount(); };
+$("speed").oninput = () => ($("speedVal").textContent = Number($("speed").value).toFixed(2) + "×");
+$("exag").oninput = () => ($("exagVal").textContent = Number($("exag").value).toFixed(2));
+$("go").onclick = generate;
+
+renderEngine();
+refresh()
+  .then(() => setEngine(state.engine))
+  .catch(() => setStatus("Impossible de contacter le serveur. Est-ce que app.py est bien lancé ?", true));
+</script>
+</body>
+</html>
